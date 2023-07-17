@@ -27,17 +27,23 @@ exec_cmd(<<"send_http">>, 'undefined', JObj, _Node, _Options) ->
     reply_error(<<"no arguments">>, JObj);
 exec_cmd(<<"send_http">>, Args, JObj, Node, Options) ->
     Version = props:get_value('client_version', Options),
-    lager:debug("received http_send command for node ~s with version ~s", [Node, Version]),
-    Url = kz_json:get_ne_binary_value(<<"Url">>, Args),
-    File = kz_json:get_value(<<"File-Name">>, Args),
-    HttpFun = case Version >= <<"mod_kazoo v1.4">> of
-                  'true' -> <<"kz_http_">>;
-                  'false' -> <<"http_">>
-              end,
-    Method = <<HttpFun/binary, (kz_json:get_value(<<"Http-Method">>, Args, <<"put">>))/binary>>,
-    Default = kapps_config:is_true(?APP_NAME, [?NODE_CMD_CONFIG, <<"send_http">>, <<"delete_on_success">>], 'false'),
-    DeleteOnSuccess = kz_json:is_true(<<"Delete-On-Success">>, JObj, Default),
-    send_http(Node, Version, File, Url, Method, JObj, DeleteOnSuccess);
+    case kz_api:is_federated_event(JObj) of
+        'true' ->
+            lager:debug("ignoring federated http_send command for node ~s with version ~s", [Node, Version]),
+            'ok';
+        'false' ->
+            lager:debug("received http_send command for node ~s with version ~s", [Node, Version]),
+            Url = kz_json:get_ne_binary_value(<<"Url">>, Args),
+            File = kz_json:get_value(<<"File-Name">>, Args),
+            HttpFun = case Version >= <<"mod_kazoo v1.4">> of
+                          'true' -> <<"kz_http_">>;
+                          'false' -> <<"http_">>
+                      end,
+            Method = <<HttpFun/binary, (kz_json:get_value(<<"Http-Method">>, Args, <<"put">>))/binary>>,
+            Default = kapps_config:is_true(?APP_NAME, [?NODE_CMD_CONFIG, <<"send_http">>, <<"delete_on_success">>], 'false'),
+            DeleteOnSuccess = kz_json:is_true(<<"Delete-On-Success">>, JObj, Default),
+            send_http(Node, Version, File, Url, Method, JObj, DeleteOnSuccess)
+    end;
 
 exec_cmd(Cmd, _Args, JObj, _Node, _Options) ->
     reply_error(<<Cmd/binary, " not_implemented">>, JObj).
